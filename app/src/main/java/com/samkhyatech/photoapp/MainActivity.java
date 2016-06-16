@@ -1,27 +1,36 @@
 package com.samkhyatech.photoapp;
 
+import android.content.Context;
 import android.content.DialogInterface;
 import android.content.Intent;
+import android.content.SharedPreferences;
 import android.database.Cursor;
 import android.net.Uri;
 import android.os.Bundle;
 import android.provider.MediaStore;
 import android.support.design.widget.FloatingActionButton;
 import android.support.v7.app.AlertDialog;
+import android.support.v7.widget.LinearLayoutManager;
 import android.support.v7.widget.RecyclerView;
 import android.support.v7.widget.Toolbar;
+import android.text.TextUtils;
 import android.util.Log;
+import android.view.Menu;
+import android.view.MenuItem;
 import android.widget.Toast;
 
-import java.io.File;
+import java.util.ArrayList;
+import java.util.Map;
 
 import butterknife.Bind;
 import butterknife.ButterKnife;
 import butterknife.OnClick;
 
-public class MainActivity extends MyActivity {
+public class MainActivity extends MyActivity implements ImageDescRvAdapter.OnAdapterInteractionListener {
 
     private static final String TAG = "MainActivity";
+    private static final String CASE_IMG_ = "case_img_";
+    private static final String CASE_DESC_ = "case_desc_";
     public static final int REQUEST_TAKE_PHOTO = 0;
     public static final int REQUEST_TAKE_VIDEO = 1;
     public static final int REQUEST_PICK_PHOTO = 2;
@@ -31,8 +40,8 @@ public class MainActivity extends MyActivity {
     @Bind(R.id.toolbar)
     Toolbar toolbar;
 
-    @Bind(R.id.rv_selectedImage)
-    RecyclerView rvSelectedImage;
+    @Bind(R.id.rv_selectedImages)
+    RecyclerView rvSelectedImages;
 
     @Bind(R.id.fab)
     FloatingActionButton fab;
@@ -40,6 +49,10 @@ public class MainActivity extends MyActivity {
     private Uri mMediaUri;
     public static final int MEDIA_TYPE_IMAGE = 4;
     public static final int MEDIA_TYPE_VIDEO = 5;
+    SharedPreferences sharedPref;
+    ArrayList<SelectedImage> selectedImages = new ArrayList<>(3);
+    private ImageDescRvAdapter mAdapter;
+
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
@@ -47,30 +60,53 @@ public class MainActivity extends MyActivity {
         setContentView(R.layout.activity_main);
         ButterKnife.bind(this);
         setSupportActionBar(toolbar);
-
-        String imgPath = "/storage/emulated/0/Pictures/socioDoc/IMG_20160616_1413161801399438.jpg";
-        File imgFile = new File(imgPath);
-        Log.e(TAG, "File Size: " + imgFile.length() );
-
-//        ImageView imgView = (ImageView) findViewById(R.id.imgView);
-//        String imgPath = "/storage/emulated/0/Pictures/socioDoc/IMG_20160616_1413161801399438.jpg";
-//        File imgFile = new File(imgPath);
-//        Picasso.with(this).load(Uri.fromFile(imgFile)).into(imgView);
+        sharedPref = getPreferences(Context.MODE_PRIVATE);
+        chekIntentFromDescription();
+        rvSelectedImages.setLayoutManager(new LinearLayoutManager(this));
+        mAdapter = new ImageDescRvAdapter(selectedImages, this);
+        rvSelectedImages.setAdapter(mAdapter);
+        populateList();
 
     }
 
+    private void populateList() {
+
+        Map<String,?> keys = sharedPref.getAll();
+        for(Map.Entry<String,?> entry : keys.entrySet()){
+            if(entry.getKey().startsWith(CASE_IMG_)){
+                String[] temp = entry.getKey().split("_");
+                String imgKey = entry.getKey();
+                String descKey = CASE_DESC_+temp[temp.length -1];
+                Log.e(TAG, "populateList: "+descKey );
+                SelectedImage imgSel = new SelectedImage();
+                imgSel.setSelectedImg(sharedPref.getString(imgKey,""));
+                imgSel.setDescription(sharedPref.getString(descKey,""));
+                imgSel.setKey(temp[temp.length -1]);
+                Log.e(TAG, "Present Images : " + entry.getValue());
+                selectedImages.add(imgSel);
+            }
+        }
+        mAdapter.notifyDataSetChanged();
+    }
+
+    private void chekIntentFromDescription() {
+        Intent intent = getIntent();
+        String imgPath = intent.getStringExtra(AddDescriptionActivity.IMAGE_FILE_PATH);
+        String desc = intent.getStringExtra(AddDescriptionActivity.IMAGE_DESC);
+
+        if(!TextUtils.isEmpty(imgPath) && !TextUtils.isEmpty(desc)){
+            addImageToCase(imgPath, desc);
+        }
+    }
+
     private void choosePhoto() {
-        checkStoragePermission();
         Log.e(TAG, "choosePhoto: ");
         Intent galleryIntent = new Intent(Intent.ACTION_PICK, MediaStore.Images.Media.EXTERNAL_CONTENT_URI);
         startActivityForResult(galleryIntent, REQUEST_PICK_PHOTO);
     }
 
-    private void checkStoragePermission() {
-    }
 
     private void takePhoto() {
-        checkStoragePermission();
         Log.e(TAG, "takePhoto: ");
         mMediaUri = Utils.getOutputMediaFileUri(MEDIA_TYPE_IMAGE);
         if (mMediaUri == null) {
@@ -92,7 +128,13 @@ public class MainActivity extends MyActivity {
             switch (requestCode) {
                 case REQUEST_TAKE_PHOTO:
                     Log.e(TAG, "onActivityResult: Take Photo" + mMediaUri.getPath());
-                    ImageCompressor.compress(this, mMediaUri.getPath());
+                    String compressedFilePath = ImageCompressor.compress(this, mMediaUri.getPath());
+                    if(!compressedFilePath.isEmpty()){
+                        Intent intent = new Intent(this, AddDescriptionActivity.class);
+                        intent.putExtra("imageFilePath", compressedFilePath);
+                        startActivity(intent);
+                        overridePendingTransition(0,0);
+                    }
                     break;
 
                 case REQUEST_PICK_PHOTO:
@@ -109,14 +151,38 @@ public class MainActivity extends MyActivity {
                     }
                     Log.e(TAG, "onActivityResult: After COnversion" + imgDecodableString);
                     if (!imgDecodableString.isEmpty()) {
-//                        ImageCompressor compressor1 = new ImageCompressor(imgDecodableString, this);
-//                        compressor1.compress();
-                        ImageCompressor.compress(this, imgDecodableString);
+                        compressedFilePath = ImageCompressor.compress(this, imgDecodableString);
+                        if(!compressedFilePath.isEmpty()){
+                            Intent intent = new Intent(this, AddDescriptionActivity.class);
+                            intent.putExtra("imageFilePath", compressedFilePath);
+                            startActivity(intent);
+                            overridePendingTransition(0,0);
+                        }
                     }
                     break;
             }
         } else {
             Toast.makeText(MainActivity.this, "Cancelled by User", Toast.LENGTH_SHORT).show();
+        }
+    }
+
+    private void addImageToCase(String compressedFilePath, String description) {
+        Log.e(TAG, "addImageToCase: " + compressedFilePath );
+        String appendable = System.currentTimeMillis() + "";
+
+        sharedPref.edit()
+                .putString(CASE_IMG_+appendable, compressedFilePath)
+                .putString(CASE_DESC_+appendable, description).apply();
+
+        Map<String,?> keys = sharedPref.getAll();
+
+        for(Map.Entry<String,?> entry : keys.entrySet()){
+            if(entry.getKey().startsWith(CASE_IMG_)){
+                Log.e(TAG, "Present Images : " + entry.getValue());
+            }
+            if(entry.getKey().startsWith(CASE_DESC_)){
+                Log.e(TAG, "Present Desc : " + entry.getValue());
+            }
         }
     }
 
@@ -140,5 +206,60 @@ public class MainActivity extends MyActivity {
         });
         AlertDialog alert = builder.create();
         alert.show();
+//        Intent intent = new Intent(this, AddDescriptionActivity.class);
+//        intent.putExtra("imageFilePath", "/storage/emulated/0/Pictures/socioDoc/COMP_pankaj2.jpg");
+//        startActivity(intent);
+//        overridePendingTransition(0,0);
+    }
+
+    @Override
+    public boolean onCreateOptionsMenu(Menu menu) {
+        // Inflate the menu; this adds items to the action bar if it is present.
+        getMenuInflater().inflate(R.menu.menu_main, menu);
+        return true;
+    }
+
+    @Override
+    public boolean onOptionsItemSelected(MenuItem item) {
+        // Handle action bar item clicks here. The action bar will
+        // automatically handle clicks on the Home/Up button, so long
+        // as you specify a parent activity in AndroidManifest.xml.
+        int id = item.getItemId();
+
+        //noinspection SimplifiableIfStatement
+        switch (id) {
+            case R.id.action_remove:
+                Map<String, ?> keys = sharedPref.getAll();
+                for (Map.Entry<String, ?> entry : keys.entrySet()) {
+                    if (entry.getKey().startsWith(CASE_IMG_) || entry.getKey().startsWith(CASE_DESC_)) {
+                        sharedPref.edit().remove(entry.getKey()).apply();
+                    }
+                }
+                break;
+            case R.id.action_display:
+                Map<String,?> keys1 = sharedPref.getAll();
+                for(Map.Entry<String,?> entry : keys1.entrySet()){
+                    if(entry.getKey().startsWith(CASE_IMG_)){
+                        Log.e(TAG, "Present Images : " + entry.getValue());
+                        Log.e(TAG, "Present Images Key: " + entry.getKey());
+                    }
+                    if(entry.getKey().startsWith(CASE_DESC_)){
+                        Log.e(TAG, "Present Desc : " + entry.getValue());
+                        Log.e(TAG, "Present Desc key: " + entry.getKey());
+                    }
+                }
+                break;
+        }
+        return super.onOptionsItemSelected(item);
+    }
+
+    @Override
+    public void onDeleteBtnClicked(int position) {
+        sharedPref.edit()
+                .remove(CASE_DESC_+selectedImages.get(position).getKey())
+                .remove(CASE_IMG_+selectedImages.get(position).getKey()).apply();
+        selectedImages.remove(selectedImages.get(position));
+        mAdapter.notifyItemRemoved(position);
+
     }
 }

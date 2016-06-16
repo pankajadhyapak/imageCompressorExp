@@ -3,4 +3,7 @@
     <string name="action_settings">Settings</string>
     <string name="contacts_permission_denied_feedback">Contact Permission Denied</string>
     <string name="permission_rationale_settings_button_text">Settings</string>
+
+    <!-- TODO: Remove or change this placeholder text -->
+    <string name="hello_blank_fragment">Hello blank fragment</string>
 </resources>

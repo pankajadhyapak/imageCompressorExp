@@ -1,20 +1,35 @@
 package com.samkhyatech.photoapp;
 
-import java.io.File;
-
 /**
  * Created by pankaj on 16/06/16.
  */
 public class SelectedImage {
 
-    File selectedImg;
+    String selectedImg;
     String description;
+    String key;
 
-    public File getSelectedImg() {
+    public String getKey() {
+        return key;
+    }
+
+    public void setKey(String key) {
+        this.key = key;
+    }
+
+    @Override
+    public String toString() {
+        return "SelectedImage{" +
+                "selectedImg='" + selectedImg + '\'' +
+                ", description='" + description + '\'' +
+                '}';
+    }
+
+    public String getSelectedImg() {
         return selectedImg;
     }
 
-    public void setSelectedImg(File selectedImg) {
+    public void setSelectedImg(String selectedImg) {
         this.selectedImg = selectedImg;
     }
 
